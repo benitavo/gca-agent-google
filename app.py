@@ -93,7 +93,7 @@ if uploaded:
         model = genai.GenerativeModel("gemini-1.5-flash-latest")
 
         response = model.generate_content(
-            PROMPT + "\n\nDOCUMENT:\n" + text[:20000]
+            PROMPT + "\n\nDOCUMENT:\n" + text[:15000]
         )
 
         try:
