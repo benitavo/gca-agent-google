@@ -2,7 +2,6 @@ import streamlit as st
 import fitz
 import requests
 import json
-import re
 
 st.set_page_config(page_title="GCA Extraction Agent", page_icon="⚡", layout="centered")
 st.markdown("""
@@ -22,10 +21,11 @@ FIELDS = [
     "quote_part_excl_vat", "timing"
 ]
 
+# Prompt strict JSON only
 PROMPT = """
-You extract structured information from French grid connection agreements (CRAC / Enedis).
-Return ONLY valid JSON. All answers must be in English.
-If a field is missing return "Info not found".
+You are an expert at reading French grid connection agreements (CRAC / Enedis).
+Respond ONLY with a valid JSON object — no explanations, no markdown, no text outside the JSON.
+All values must be in English. If a field is missing, return "Info not found".
 Fields: """ + ", ".join(FIELDS)
 
 def extract_pdf_text(file):
@@ -70,32 +70,37 @@ if uploaded:
                 else:
                     result = response.json()
                     # Extraire le texte du chat
+                    output_text = ""
                     if "choices" in result and len(result["choices"]) > 0:
                         output_text = result["choices"][0]["message"]["content"]
-                    else:
-                        output_text = ""
 
                     if not output_text.strip():
                         st.error("❌ Model returned empty text")
                         st.text(result)
                     else:
-                        # Nettoyer le texte pour ne garder que le JSON
-                        match = re.search(r"\{.*\}", output_text, re.DOTALL)
-                        if match:
-                            data = json.loads(match.group())
-                            st.success("✅ Extraction complete")
-                            st.json(data)
+                        # Parsing robuste pour attraper le JSON
+                        start = output_text.find("{")
+                        end = output_text.rfind("}") + 1
+                        if start != -1 and end != -1:
+                            json_str = output_text[start:end]
+                            try:
+                                data = json.loads(json_str)
+                                st.success("✅ Extraction complete")
+                                st.json(data)
 
-                            # Export CSV
-                            csv_content = "Field,Value\n" + "\n".join(
-                                f"{field},{data.get(field,'')}" for field in FIELDS
-                            )
-                            st.download_button(
-                                "⬇ Download CSV",
-                                csv_content,
-                                file_name=f"GCA_{data.get('project','output')}.csv",
-                                mime="text/csv"
-                            )
+                                # Export CSV
+                                csv_content = "Field,Value\n" + "\n".join(
+                                    f"{field},{data.get(field,'')}" for field in FIELDS
+                                )
+                                st.download_button(
+                                    "⬇ Download CSV",
+                                    csv_content,
+                                    file_name=f"GCA_{data.get('project','output')}.csv",
+                                    mime="text/csv"
+                                )
+                            except json.JSONDecodeError:
+                                st.error("❌ JSON could not be decoded")
+                                st.text(json_str)
                         else:
                             st.error("❌ No JSON found in model output")
                             st.text(output_text)
