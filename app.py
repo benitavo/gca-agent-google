@@ -1,5 +1,5 @@
 import streamlit as st
-import fitz
+import fitz  # PyMuPDF
 import requests
 import json
 
@@ -46,7 +46,7 @@ if uploaded:
             try:
                 headers = {"Authorization": f"Bearer {st.secrets['HF_API_KEY']}"}
                 payload = {
-                    "inputs": PROMPT + "\n\nDOCUMENT:\n" + text[:15000],  # limit to 15k chars
+                    "inputs": PROMPT + "\n\nDOCUMENT:\n" + text[:15000],
                     "parameters": {"max_new_tokens": 1500}
                 }
 
@@ -54,27 +54,40 @@ if uploaded:
                     "https://router.huggingface.co/models/NousResearch/Llama-2-7b-hf",
                     headers=headers,
                     json=payload,
-                    timeout=60
+                    timeout=120
                 )
 
-                output_text = response.json()[0]['generated_text']
-                data = json.loads(output_text)
+                # Robust parsing of HF router response
+                resp_json = response.json()
+                st.write(resp_json)  # for debugging if needed
 
-                st.success("✅ Extraction complete")
-                st.json(data)
+                if "generated_text" in resp_json:
+                    output_text = resp_json["generated_text"]
+                elif "data" in resp_json and len(resp_json["data"]) > 0:
+                    output_text = resp_json["data"][0]["generated_text"]
+                else:
+                    output_text = ""
 
-                # Export CSV
-                csv_content = "Field,Value\n" + "\n".join(
-                    f"{field},{data.get(field,'')}" for field in FIELDS
-                )
+                if not output_text.strip():
+                    st.error("❌ Hugging Face model returned empty output")
+                else:
+                    data = json.loads(output_text)
+                    st.success("✅ Extraction complete")
+                    st.json(data)
 
-                st.download_button(
-                    "⬇ Download CSV",
-                    csv_content,
-                    file_name=f"GCA_{data.get('project','output')}.csv",
-                    mime="text/csv"
-                )
+                    # Export CSV
+                    csv_content = "Field,Value\n" + "\n".join(
+                        f"{field},{data.get(field,'')}" for field in FIELDS
+                    )
+
+                    st.download_button(
+                        "⬇ Download CSV",
+                        csv_content,
+                        file_name=f"GCA_{data.get('project','output')}.csv",
+                        mime="text/csv"
+                    )
 
             except Exception as e:
                 st.error(f"❌ Extraction failed: {e}")
-                st.text(response.text if 'response' in locals() else "")
+                if 'response' in locals():
+                    st.text(response.text)
