@@ -23,8 +23,7 @@ FIELDS = [
 
 PROMPT = """
 You extract structured information from French grid connection agreements (CRAC / Enedis).
-Return ONLY valid JSON.
-All answers must be in English.
+Return ONLY valid JSON. All answers must be in English.
 If a field is missing return "Info not found".
 Fields: """ + ", ".join(FIELDS)
 
@@ -42,17 +41,23 @@ if uploaded:
     text = extract_pdf_text(uploaded)
 
     if st.button("⚡ Extract Data"):
-        with st.spinner("Extracting data using Hugging Face API…"):
+        with st.spinner("Extracting data using Hugging Face Chat Completion API…"):
             try:
-                headers = {"Authorization": f"Bearer {st.secrets['HF_API_KEY']}"}
-                max_chars = 12000
+                headers = {
+                    "Authorization": f"Bearer {st.secrets['HF_API_KEY']}",
+                    "Content-Type": "application/json"
+                }
+
                 payload = {
-                    "inputs": PROMPT + "\n\nDOCUMENT:\n" + text[:max_chars],
-                    "parameters": {"max_new_tokens": 1500}
+                    "model": "deepseek-ai/DeepSeek-V3.2",
+                    "messages": [
+                        {"role": "user", "content": PROMPT + "\n\nDOCUMENT:\n" + text[:15000]}
+                    ],
+                    "max_tokens": 2000
                 }
 
                 response = requests.post(
-                    "https://router.huggingface.co/models/Qwen/Qwen2.5-7B-Instruct",
+                    "https://router.huggingface.co/v1/chat/completions",
                     headers=headers,
                     json=payload,
                     timeout=120
@@ -62,23 +67,16 @@ if uploaded:
                     st.error(f"❌ Hugging Face API returned {response.status_code}")
                     st.text(response.text)
                 else:
-                    try:
-                        resp_json = response.json()
-                    except Exception:
-                        st.error("❌ Response is not JSON, showing raw output:")
-                        st.text(response.text)
-                        resp_json = None
-
-                    output_text = ""
-                    if resp_json:
-                        if "generated_text" in resp_json:
-                            output_text = resp_json["generated_text"]
-                        elif "data" in resp_json and len(resp_json["data"]) > 0:
-                            output_text = resp_json["data"][0].get("generated_text","")
+                    result = response.json()
+                    # Extract chat content
+                    if "choices" in result and len(result["choices"]) > 0:
+                        output_text = result["choices"][0]["message"]["content"]
+                    else:
+                        output_text = ""
 
                     if not output_text.strip():
                         st.error("❌ Model returned empty text")
-                        st.text(resp_json)
+                        st.text(result)
                     else:
                         data = json.loads(output_text)
                         st.success("✅ Extraction complete")
