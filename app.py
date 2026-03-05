@@ -1,5 +1,5 @@
 import streamlit as st
-import fitz  # PyMuPDF
+import fitz
 import requests
 import json
 
@@ -45,14 +45,14 @@ if uploaded:
         with st.spinner("Extracting data using Hugging Face API…"):
             try:
                 headers = {"Authorization": f"Bearer {st.secrets['HF_API_KEY']}"}
-                max_chars = 12000  # Limit PDF text for API stability
+                max_chars = 12000
                 payload = {
                     "inputs": PROMPT + "\n\nDOCUMENT:\n" + text[:max_chars],
                     "parameters": {"max_new_tokens": 1500}
                 }
 
                 response = requests.post(
-                    "https://router.huggingface.co/models/TheBloke/Mistral-7B-Instruct-GGUF",
+                    "https://router.huggingface.co/models/Qwen/Qwen2.5-7B-Instruct",
                     headers=headers,
                     json=payload,
                     timeout=120
@@ -65,7 +65,7 @@ if uploaded:
                     try:
                         resp_json = response.json()
                     except Exception:
-                        st.error("❌ Response is not JSON, raw output below:")
+                        st.error("❌ Response is not JSON, showing raw output:")
                         st.text(response.text)
                         resp_json = None
 
@@ -75,7 +75,7 @@ if uploaded:
                             output_text = resp_json["generated_text"]
                         elif "data" in resp_json and len(resp_json["data"]) > 0:
                             output_text = resp_json["data"][0].get("generated_text","")
-                    
+
                     if not output_text.strip():
                         st.error("❌ Model returned empty text")
                         st.text(resp_json)
@@ -84,7 +84,6 @@ if uploaded:
                         st.success("✅ Extraction complete")
                         st.json(data)
 
-                        # Export CSV
                         csv_content = "Field,Value\n" + "\n".join(
                             f"{field},{data.get(field,'')}" for field in FIELDS
                         )
