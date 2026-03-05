@@ -45,8 +45,9 @@ if uploaded:
         with st.spinner("Extracting data using Hugging Face API…"):
             try:
                 headers = {"Authorization": f"Bearer {st.secrets['HF_API_KEY']}"}
+                max_chars = 12000  # Limit PDF text for API stability
                 payload = {
-                    "inputs": PROMPT + "\n\nDOCUMENT:\n" + text[:15000],
+                    "inputs": PROMPT + "\n\nDOCUMENT:\n" + text[:max_chars],
                     "parameters": {"max_new_tokens": 1500}
                 }
 
@@ -57,35 +58,42 @@ if uploaded:
                     timeout=120
                 )
 
-                # Robust parsing of HF router response
-                resp_json = response.json()
-                st.write(resp_json)  # for debugging if needed
-
-                if "generated_text" in resp_json:
-                    output_text = resp_json["generated_text"]
-                elif "data" in resp_json and len(resp_json["data"]) > 0:
-                    output_text = resp_json["data"][0]["generated_text"]
+                if response.status_code != 200:
+                    st.error(f"❌ Hugging Face API returned {response.status_code}")
+                    st.text(response.text)
                 else:
+                    try:
+                        resp_json = response.json()
+                    except Exception:
+                        st.error("❌ Response is not JSON, raw output below:")
+                        st.text(response.text)
+                        resp_json = None
+
                     output_text = ""
+                    if resp_json:
+                        if "generated_text" in resp_json:
+                            output_text = resp_json["generated_text"]
+                        elif "data" in resp_json and len(resp_json["data"]) > 0:
+                            output_text = resp_json["data"][0].get("generated_text","")
+                    
+                    if not output_text.strip():
+                        st.error("❌ Model returned empty text")
+                        st.text(resp_json)
+                    else:
+                        data = json.loads(output_text)
+                        st.success("✅ Extraction complete")
+                        st.json(data)
 
-                if not output_text.strip():
-                    st.error("❌ Hugging Face model returned empty output")
-                else:
-                    data = json.loads(output_text)
-                    st.success("✅ Extraction complete")
-                    st.json(data)
-
-                    # Export CSV
-                    csv_content = "Field,Value\n" + "\n".join(
-                        f"{field},{data.get(field,'')}" for field in FIELDS
-                    )
-
-                    st.download_button(
-                        "⬇ Download CSV",
-                        csv_content,
-                        file_name=f"GCA_{data.get('project','output')}.csv",
-                        mime="text/csv"
-                    )
+                        # Export CSV
+                        csv_content = "Field,Value\n" + "\n".join(
+                            f"{field},{data.get(field,'')}" for field in FIELDS
+                        )
+                        st.download_button(
+                            "⬇ Download CSV",
+                            csv_content,
+                            file_name=f"GCA_{data.get('project','output')}.csv",
+                            mime="text/csv"
+                        )
 
             except Exception as e:
                 st.error(f"❌ Extraction failed: {e}")
