@@ -2,6 +2,7 @@ import streamlit as st
 import fitz
 import requests
 import json
+import re
 
 st.set_page_config(page_title="GCA Extraction Agent", page_icon="⚡", layout="centered")
 st.markdown("""
@@ -41,7 +42,7 @@ if uploaded:
     text = extract_pdf_text(uploaded)
 
     if st.button("⚡ Extract Data"):
-        with st.spinner("Extracting data using Hugging Face Chat Completion API…"):
+        with st.spinner("Extracting data using Hugging Face API…"):
             try:
                 headers = {
                     "Authorization": f"Bearer {st.secrets['HF_API_KEY']}",
@@ -68,7 +69,7 @@ if uploaded:
                     st.text(response.text)
                 else:
                     result = response.json()
-                    # Extract chat content
+                    # Extraire le texte du chat
                     if "choices" in result and len(result["choices"]) > 0:
                         output_text = result["choices"][0]["message"]["content"]
                     else:
@@ -78,19 +79,26 @@ if uploaded:
                         st.error("❌ Model returned empty text")
                         st.text(result)
                     else:
-                        data = json.loads(output_text)
-                        st.success("✅ Extraction complete")
-                        st.json(data)
+                        # Nettoyer le texte pour ne garder que le JSON
+                        match = re.search(r"\{.*\}", output_text, re.DOTALL)
+                        if match:
+                            data = json.loads(match.group())
+                            st.success("✅ Extraction complete")
+                            st.json(data)
 
-                        csv_content = "Field,Value\n" + "\n".join(
-                            f"{field},{data.get(field,'')}" for field in FIELDS
-                        )
-                        st.download_button(
-                            "⬇ Download CSV",
-                            csv_content,
-                            file_name=f"GCA_{data.get('project','output')}.csv",
-                            mime="text/csv"
-                        )
+                            # Export CSV
+                            csv_content = "Field,Value\n" + "\n".join(
+                                f"{field},{data.get(field,'')}" for field in FIELDS
+                            )
+                            st.download_button(
+                                "⬇ Download CSV",
+                                csv_content,
+                                file_name=f"GCA_{data.get('project','output')}.csv",
+                                mime="text/csv"
+                            )
+                        else:
+                            st.error("❌ No JSON found in model output")
+                            st.text(output_text)
 
             except Exception as e:
                 st.error(f"❌ Extraction failed: {e}")
