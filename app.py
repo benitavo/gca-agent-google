@@ -52,7 +52,7 @@ if uploaded:
                 }
 
                 response = requests.post(
-                    "https://router.huggingface.co/models/NousResearch/Llama-2-7b-hf",
+                    "https://router.huggingface.co/models/TheBloke/Mistral-7B-Instruct-GGUF",
                     headers=headers,
                     json=payload,
                     timeout=120
