@@ -51,7 +51,7 @@ if uploaded:
                 }
 
                 response = requests.post(
-                    "https://api-inference.huggingface.co/models/NousResearch/Llama-2-7b-hf",
+                    "https://router.huggingface.co/models/NousResearch/Llama-2-7b-hf",
                     headers=headers,
                     json=payload,
                     timeout=60
