@@ -90,7 +90,7 @@ if uploaded:
 
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash-latest")
 
         response = model.generate_content(
             PROMPT + "\n\nDOCUMENT:\n" + text[:20000]
